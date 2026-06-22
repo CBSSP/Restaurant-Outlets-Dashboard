@@ -30,18 +30,32 @@ st.title("📊 Restaurant Analytics Dashboard")
 # LOAD DATA
 # --------------------------------------------------
 # --------------------------------------------------
-# LOAD DATA (UPDATED FOR LOCAL PARQUET)
+# LOAD DATA (ROBUST LOCAL PARQUET LOADER)
 # --------------------------------------------------
 from pathlib import Path
 
 @st.cache_data
 def load_data():
-    # Look for the 'data' folder right next to app.py
-    data_folder = Path("data")
+    # This finds the exact absolute folder directory where app.py lives, 
+    # then looks for the 'data' folder inside it.
+    current_dir = Path(__file__).parent
+    data_folder = current_dir / "data"
+    
     all_frames = []
 
-    # Automatically scan for all .parquet files in the folder
-    for file in data_folder.glob("*.parquet"):
+    # Check if the data folder even exists in the cloud deployment
+    if not data_folder.exists():
+        st.error(f"📁 The directory '{data_folder}' was not found on the server! Please verify your GitHub upload.")
+        return pd.DataFrame()
+
+    # Automatically scan for all .parquet files inside that folder
+    parquet_files = list(data_folder.glob("*.parquet"))
+    
+    if len(parquet_files) == 0:
+        st.warning(f"⚠️ Found the 'data' folder, but it is completely empty! No .parquet files detected inside: {data_folder}")
+        return pd.DataFrame()
+
+    for file in parquet_files:
         try:
             # Read the local parquet file
             df = pd.read_parquet(file)
@@ -62,15 +76,19 @@ def load_data():
             all_frames.append(df)
 
         except Exception as e:
-            st.error(f"Error loading local file {file.name}: {e}")
-
-    if len(all_frames) == 0:
-        return pd.DataFrame()
+            st.error(f"❌ Error loading local file {file.name}: {e}")
 
     return pd.concat(all_frames, ignore_index=True)
 
 # Run the local loader
 df = load_data()
+
+# --------------------------------------------------
+# GLOBAL SAFETY CHECK (Stops line 139 crash if df is empty)
+# --------------------------------------------------
+if df.empty:
+    st.error("🛑 The data app cannot build because no restaurant records were successfully parsed. Check your file structures above.")
+    st.stop() # Safely pauses the rest of app.py execution
 
 
 
